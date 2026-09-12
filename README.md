@@ -10,13 +10,16 @@
 
 同一套解密逻辑配两个前端：给日常使用的图形界面，和给脚本 / 批处理准备的命令行。
 
-> 解出的音频流与上游 Go 实现**逐字节一致**——已用 4 个真实 `.ncm`（46–66 MB）
-> 和 10 个 `.mflac` / `.mgg` 交叉验证，音频帧 SHA1 相同，元数据与封面也一致。
+> 解出的音频流与上游 Go 实现**逐字节一致**——已用真实 `.ncm`（46–66 MB）和
+> 10 个 `.mflac` / `.mgg` 交叉验证，音频帧 SHA1 相同，元数据与封面也一致。
+> 同样的比对在单文件 `fne.exe` 上重跑过：9/9 FLAC 音频帧、OGG 整文件 SHA1 均一致。
+> 上游 Go 版本只作参照，已不在此仓库内。
 
 ---
 
 ## 特性
 
+- **免环境单文件** —— 一个约 19 MB 的 `fne.exe`，双击就是图形界面，带参数就是命令行
 - **两个前端，一套逻辑** —— `fne-gui` 图形界面、`fne` 命令行，共用同一个转换管线
 - **不重编码** —— 只解密音频流并重接元数据块，音质原样
 - **增量转换** —— 输出目录里已存在的同名文件自动跳过，可随时中断重跑
@@ -27,10 +30,29 @@
 
 ## 环境要求
 
-- **Windows**（QMC2 路径要读取 QQ 音乐进程内存，用到 Win32 API）
-- Python 3.9 或更高
+| 用法 | 需要什么 |
+| --- | --- |
+| 单文件 `fne.exe` | **什么都不用装**，Windows 10 / 11 x64 |
+| 从源码运行 | Windows + Python 3.9 或更高 |
+
+QMC2 路径必须读 QQ 音乐进程的内存，用到 Win32 API，所以目前只有 Windows 版本。
 
 ## 安装
+
+### 方式一：下载单文件（推荐）
+
+从 [Releases](https://github.com/gumi-ri/FNE-py/releases) 下载 `fne.exe`，约 19 MB，
+**免安装、免 Python 环境**。同一个文件既是图形界面也是命令行：
+
+```bash
+fne.exe                                        # 双击或直接运行 = 打开窗口
+fne.exe -i "C:/Music/VipSongsDownload" -o "D:/Music/Converted"
+fne.exe --selftest                             # 自检：报告这个文件能不能正常用
+```
+
+换电脑 / 换目录时把 `config.json` 和 `.fne/` 一起带走——它们放在 exe 同级目录。
+
+### 方式二：从源码安装
 
 ```bash
 git clone https://github.com/gumi-ri/FNE-py.git
@@ -47,6 +69,17 @@ pip install -e ".[dev]"      # 含 pytest / pyflakes
 ```
 
 不安装也能直接跑：`python -m fne -h`。
+
+### 自己打包单文件
+
+```bash
+pip install pyinstaller
+pyinstaller --clean --noconfirm fne.spec     # 产出 dist/fne.exe
+dist/fne.exe --selftest                      # 先自检再分发
+```
+
+`--selftest` 会真的开一个 Tk 窗口、往缓存目录写一个文件，并报出 Python 版本、
+stdout 编码和各依赖模块是否打进去了——打包漏东西在这里就能看出来，不用等用户点到窗口。
 
 ## 使用
 
@@ -82,10 +115,14 @@ fne -i <输入> -o <输出> --verbose
 | `--api-concurrent` | QQ 音乐接口并发数，默认 3 |
 | `--api-delay-min` / `--api-delay-max` | 接口随机延迟区间（毫秒），默认 200 / 800 |
 | `--verbose` | 失败时打印完整 traceback |
+| `-g, --gui` | 强制打开图形界面 |
+| `--selftest` | 自检并退出（打包后排查用） |
 | `-V, --version` | 打印版本号 |
 
-不带任何参数时，会弹出目录选择框。退出码：全部成功为 `0`，有文件失败为 `1`，
-方便在脚本里判断。
+单文件版本把上面的 `fne` 换成 `fne.exe` 即可。
+
+**不带任何参数**时会打开图形界面——这正是让一个可执行文件通吃双击和命令行的规则。
+退出码：全部成功为 `0`，有文件失败为 `1`，方便在脚本里判断。
 
 ### 配置文件
 
@@ -116,7 +153,8 @@ fne -i <输入> -o <输出> --verbose
 
 1. **收集** —— 扫描进程内存与 cookie 文件，按可信度取出**全部**候选令牌并排序
    （优先 `Q_H_L_` 前缀、靠近当前登录 UIN、长度更长者）
-2. **记录** —— 候选列表写入 `.fne/authst_cache.json`（在包目录旁），最近读取的排在最前
+2. **记录** —— 候选列表按可信度写入 `.fne/authst_cache.json`，最近读取的排在最前
+   （源码运行在包目录旁，单文件版本在 exe 同级目录）
 3. **优先用缓存** —— 下次运行直接取列表第一个，**完全跳过内存扫描**（约 0.5 ms）
 4. **失效顺延** —— 某个令牌被服务端拒绝时自动从缓存摘掉并换下一个，全部用完才重新扫描
 
@@ -173,6 +211,7 @@ Go 版逐字节异或，照搬成 Python 会慢到分钟级。两个流密码都
 
 ```
 fne/
+  launcher.py   唯一入口：决定走命令行还是图形界面，并做打包自检
   cli.py        参数解析、配置、扫描、并发调度（两个前端共用）
   gui.py        tkinter 图形界面
   qqmusic.py    QQ 音乐凭证、令牌缓存、HTTP 接口
@@ -182,7 +221,8 @@ fne/
   tea.py        TEA / 腾讯 TC-TEA
   tags.py       元数据写入（mutagen 封装）
   win32.py      进程枚举、跨进程读内存、文件时间
-  util.py       周期性异或、原子写入
+  util.py       路径锚定、周期性异或、原子写入、UTF-8 输出
+fne.spec        PyInstaller 单文件打包配置
 tests/          自动化测试
 tools/          发布回归用的音频帧比对工具
 docs/           使用教程与审计报告

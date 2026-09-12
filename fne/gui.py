@@ -24,15 +24,23 @@ except ImportError:
     tk = None
     filedialog = messagebox = ttk = None
 
-from . import __version__
+from . import __version__, util
 from .cli import load_config, run
 
 POLL_MS = 80
 MAX_LOG_LINES = 400
 
+# A Tcl interpreter created straight after another one was torn down can
+# intermittently refuse to initialise on Windows, reporting one of its own ttk
+# theme scripts as unreadable even though the file is on disk. The attempt
+# right after it works. Retrying keeps a healthy double click from being
+# turned away over a one-off hiccup; a Tk that is genuinely unusable (no
+# display, no Tcl data directory) fails both times and still reports itself.
+_TK_ROOT_ATTEMPTS = 2
 
-def _create_root():
-    """Create the Tk root.
+
+def create_root():
+    """Create the Tk root, retrying once.
 
     Split into its own function so callers (and tests) can deal with the
     "no display / no tkinter" case without launching a window.
@@ -40,7 +48,14 @@ def _create_root():
     if tk is None:
         raise RuntimeError(
             "tkinter 未随这个 Python 安装（部分精简版发行版不带 GUI 模块）")
-    return tk.Tk()
+
+    error = None
+    for _ in range(_TK_ROOT_ATTEMPTS):
+        try:
+            return tk.Tk()
+        except Exception as exc:                       # noqa: BLE001
+            error = exc
+    raise error
 
 
 class ConverterApp:
@@ -250,9 +265,42 @@ class ConverterApp:
             messagebox.showerror("发生异常", message[1].strip().splitlines()[-1])
 
 
-def main(argv: list[str] | None = None) -> int:
+def _hide_own_console() -> None:
+    """Hide the console window, but only if Windows made it for us.
+
+    The frozen build is a console-subsystem executable so that it can also be
+    driven from a shell. Double clicking it therefore opens a console window
+    that would sit behind the GUI for the whole session. A console inherited
+    from the shell the user launched us from must be left alone - hiding the
+    user's own terminal would be rude and confusing.
+    """
+    if os.name != "nt":
+        return
     try:
-        root = _create_root()
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.windll.kernel32
+        user32 = ctypes.windll.user32
+        window = kernel32.GetConsoleWindow()
+        if not window:
+            return
+        owner = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(window, ctypes.byref(owner))
+        if owner.value == kernel32.GetCurrentProcessId():
+            user32.ShowWindow(window, 0)          # SW_HIDE
+    except Exception:
+        pass
+
+
+def main(argv: list[str] | None = None) -> int:
+    # The window is not the only thing this prints: a failure to start it
+    # explains itself in Chinese, and the frozen interpreter would refuse to
+    # write that to a redirected stream.
+    util.force_utf8_streams()
+
+    try:
+        root = create_root()
     except Exception as exc:  # no display, or tkinter not built in
         print(f"无法启动图形界面：{exc}")
         print("请改用命令行：fne -i <输入目录> -o <输出目录>")
@@ -261,6 +309,7 @@ def main(argv: list[str] | None = None) -> int:
     root.title(f"FNE {__version__} · 音乐解密转换")
     root.minsize(680, 460)
     ConverterApp(root)
+    _hide_own_console()
     root.mainloop()
     return 0
 

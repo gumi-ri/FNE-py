@@ -20,7 +20,7 @@ from typing import Iterable, Iterator
 
 import requests
 
-from . import win32
+from . import util, win32
 
 MUSICU_URL = "https://u.y.qq.com/cgi-bin/musicu.fcg"
 COVER_URL = "https://y.gtimg.cn/music/photo_new/T002R800x800M000{}.jpg"
@@ -322,10 +322,11 @@ def read_authst_from_process_memory(uin: str) -> str:
 # authst cache: an ordered list of every token we have ever read
 # --------------------------------------------------------------------------
 
-# The cache lives in ``.fne`` beside the package rather than in the user's
-# home directory - the tool keeps its files inside its own folder.
-_CACHE_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".fne")
+# The cache lives in ``.fne`` beside the tool rather than in the user's home
+# directory. ``app_dir()`` resolves that to the executable's own folder in a
+# frozen build, because a single-file bundle's package directory is a temp
+# directory deleted on exit - a cache written there would not survive a run.
+_CACHE_DIR = os.path.join(util.app_dir(), ".fne")
 CACHE_PATH = os.path.join(_CACHE_DIR, "authst_cache.json")
 MAX_HISTORY = 16
 MAX_AUTH_ATTEMPTS = 12

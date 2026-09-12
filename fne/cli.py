@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 import threading
 import time
 import traceback
@@ -20,7 +19,7 @@ from dataclasses import dataclass, field
 
 from tqdm import tqdm
 
-from . import __version__, ncm, qmc2, qqmusic
+from . import __version__, ncm, qmc2, qqmusic, util
 
 CONFIG_NAME = "config.json"
 AUDIO_EXTENSIONS = {".mp3", ".flac", ".ogg"}
@@ -31,10 +30,9 @@ AUDIO_EXTENSIONS = {".mp3", ".flac", ".ogg"}
 # --------------------------------------------------------------------------
 
 def load_config(path: str | None = None) -> dict:
-    """Load config.json from next to the executable or the given path."""
+    """Load config.json from beside the tool, or from the given path."""
     if path is None:
-        base = os.path.dirname(os.path.abspath(sys.argv[0]))
-        path = os.path.join(base, CONFIG_NAME)
+        path = os.path.join(util.app_dir(), CONFIG_NAME)
     if not os.path.exists(path):
         return {}
     try:

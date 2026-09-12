@@ -30,7 +30,7 @@ def _state(widget) -> str:
 def root():
     """A withdrawn Tk root, skipped when Tk cannot start at all."""
     try:
-        handle = gui._create_root()
+        handle = gui.create_root()
     except Exception as exc:  # no display, or an incomplete Tcl/Tk install
         pytest.skip(f"Tk unavailable: {exc}")
     handle.withdraw()
@@ -45,12 +45,48 @@ def test_main_degrades_when_tkinter_cannot_start(monkeypatch, capsys):
     def boom():
         raise RuntimeError("no display name and no $DISPLAY environment variable")
 
-    monkeypatch.setattr(gui, "_create_root", boom)
+    monkeypatch.setattr(gui, "create_root", boom)
 
     assert gui.main() == 1
     out = capsys.readouterr().out
     assert "无法启动图形界面" in out
     assert "fne -i" in out                      # points at the CLI fallback
+
+
+def test_create_root_retries_a_transient_tcl_failure(monkeypatch):
+    """One flaky Tcl init must not cost the user their window.
+
+    Seen on Windows: a Tcl interpreter created right after another one was
+    destroyed intermittently calls a ttk theme script unreadable, then works
+    on the next attempt.
+    """
+    calls = []
+
+    def flaky():
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("couldn't read file .../ttk/vistaTheme.tcl")
+        return "root"
+
+    monkeypatch.setattr(gui, "tk", type("FakeTk", (), {"Tk": staticmethod(flaky)}))
+
+    assert gui.create_root() == "root"
+    assert len(calls) == 2
+
+
+def test_create_root_gives_up_on_a_permanently_broken_tk(monkeypatch):
+    """Retrying must not disguise a Tk that is really unusable."""
+    calls = []
+
+    def broken():
+        calls.append(1)
+        raise RuntimeError("no display name and no $DISPLAY environment variable")
+
+    monkeypatch.setattr(gui, "tk", type("FakeTk", (), {"Tk": staticmethod(broken)}))
+
+    with pytest.raises(RuntimeError, match="no display"):
+        gui.create_root()
+    assert len(calls) == gui._TK_ROOT_ATTEMPTS
 
 
 def test_buttons_follow_the_running_state(root):

@@ -92,10 +92,65 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  # The single-file build is the download most people will use, so it is built
+  # and made to answer for itself on every push rather than only at release
+  # time. The self check is the point: it opens a real Tk window from inside
+  # the bundle, which is the one thing a source-level test cannot prove.
+  exe:
+    name: build single-file exe (windows x64)
+    needs: [lint, test]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Build
+        run: pyinstaller --clean --noconfirm fne.spec
+
+      - name: Check the artifact is really 64-bit
+        shell: bash
+        run: |
+          python - <<'PY'
+          import struct
+          data = open("dist/fne.exe", "rb").read(0x400)
+          pe = struct.unpack_from("<I", data, 0x3C)[0]
+          machine = struct.unpack_from("<H", data, pe + 4)[0]
+          assert machine == 0x8664, f"expected x64 (0x8664), got {machine:#x}"
+          print("dist/fne.exe is x64")
+          PY
+
+      # Piped on purpose: a frozen interpreter that falls back to the ANSI
+      # code page dies on the first non-ASCII character, and only when its
+      # output is not a console. Running it this way is what caught that.
+      - name: Self check the executable
+        shell: bash
+        run: |
+          ./dist/fne.exe --selftest | tee selftest.txt
+          if ! grep -q "selftest: PASS" selftest.txt; then
+            echo "::error::the frozen build failed its own self check"
+            exit 1
+          fi
+          grep -q "tk window  : ok" selftest.txt || {
+            echo "::error::the bundled Tk could not open a window"; exit 1; }
+          grep -q "output enc : utf-8" selftest.txt || {
+            echo "::error::stdout is not UTF-8; non-ASCII output will crash"; exit 1; }
+          ./dist/fne.exe -V
+          ./dist/fne.exe --help > /dev/null
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exe
+          path: dist/fne.exe
+          if-no-files-found: error
+
   release:
     name: publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build]
+    needs: [build, exe]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -104,6 +159,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: dist
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: exe
           path: dist
 
       # A tag that disagrees with fne.__version__ would publish a wheel
