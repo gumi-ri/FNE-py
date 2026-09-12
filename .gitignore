@@ -1,0 +1,22 @@
+# --- build artifacts ---
+build/
+dist/
+*.egg-info/
+.eggs/
+.smoke/
+
+# --- test / tooling caches ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# --- runtime state (authst cache lives next to the package) ---
+# Contains a plaintext login token - never commit.
+.fne/
+
+# --- local config and conversion output ---
+config.json
+out*/

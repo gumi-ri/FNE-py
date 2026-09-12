@@ -1,0 +1,8 @@
+{
+  "inputFolder": "C:/Users/gumi/Music/VipSongsDownload",
+  "outputFolder": "C:/Music/Converted",
+  "recursive": false,
+  "apiConcurrent": 3,
+  "apiDelayMin": 200,
+  "apiDelayMax": 800
+}

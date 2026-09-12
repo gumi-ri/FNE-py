@@ -1,0 +1,13 @@
+# Files shipped in the source distribution but not in the wheel.
+include LICENSE
+include CHANGELOG.md
+include config.json.example
+recursive-include tests *.py
+recursive-include tools *.py
+recursive-include docs *.md
+
+# Never ship local runtime state or build output.
+global-exclude __pycache__/*.pyc
+prune .fne
+prune .github
+exclude config.json

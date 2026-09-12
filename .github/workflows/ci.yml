@@ -1,0 +1,121 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: lint (pyflakes)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pyflakes
+        run: pip install pyflakes
+      - name: Static check
+        run: pyflakes fne tests tools
+
+  # The suite runs on Windows only: the QMC2 path reads another process's
+  # memory through Win32 APIs, so fne.win32 cannot even import elsewhere.
+  test:
+    name: test (py${{ matrix.python-version }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Run tests
+        run: pytest -q
+
+  build:
+    name: build sdist + wheel
+    needs: [lint, test]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build backend
+        run: pip install build
+      - name: Build
+        run: python -m build
+
+      - name: Verify the sdist carries docs and tests
+        shell: bash
+        run: |
+          python - <<'PY'
+          import glob, tarfile
+          names = tarfile.open(glob.glob("dist/*.tar.gz")[0]).getnames()
+          for required in ("LICENSE", "README.md", "pyproject.toml",
+                           "docs/USAGE.md", "tools/compare_audio.py",
+                           "tests/test_gui.py"):
+              assert any(n.endswith(required) for n in names), required
+          print("sdist contents OK")
+          PY
+
+      # Installs the built wheel into a throwaway environment, so a broken
+      # wheel (missing module, bad entry point) fails here and not for users.
+      - name: Verify the wheel installs and the entry points work
+        shell: bash
+        run: |
+          python -m venv .smoke
+          .smoke/Scripts/python -m pip install --quiet --upgrade pip
+          .smoke/Scripts/pip install --quiet dist/*.whl
+          .smoke/Scripts/fne -V
+          .smoke/Scripts/fne --help > /dev/null
+          .smoke/Scripts/python -c "import fne, fne.gui; print('imports OK')"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      # A tag that disagrees with fne.__version__ would publish a wheel
+      # whose version does not match the release it sits under.
+      - name: Check the tag matches the package version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          ver=$(python -c "import re,pathlib; print(re.search(r'__version__ = \"([^\"]+)\"', pathlib.Path('fne/__init__.py').read_text()).group(1))")
+          echo "tag=$tag  version=$ver"
+          [ "$tag" = "$ver" ] || { echo "::error::tag $tag does not match __version__ $ver"; exit 1; }
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

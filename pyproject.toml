@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fne"
+dynamic = ["version"]
+description = "Convert NetEase Cloud Music (.ncm) and QQ Music QMC2 (.mflac/.mgg) files to standard audio"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+keywords = ["ncm", "qmc2", "mflac", "mgg", "netease", "qqmusic", "flac", "decrypt"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Sound/Audio :: Conversion",
+]
+dependencies = [
+    "cryptography>=42",
+    "mutagen>=1.47",
+    "psutil>=5.9",
+    "requests>=2.31",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pyflakes>=3.0", "build>=1.2"]
+
+[project.scripts]
+fne = "fne.cli:main"
+fne-gui = "fne.gui:main"
+
+[project.urls]
+Homepage = "https://github.com/gumi-ri/FNE-py"
+Source = "https://github.com/gumi-ri/FNE-py"
+Issues = "https://github.com/gumi-ri/FNE-py/issues"
+Changelog = "https://github.com/gumi-ri/FNE-py/blob/main/CHANGELOG.md"
+
+[tool.setuptools]
+packages = ["fne"]
+
+[tool.setuptools.dynamic]
+version = { attr = "fne.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

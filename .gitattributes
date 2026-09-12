@@ -1,0 +1,13 @@
+# Normalise line endings so the repo does not churn on Windows checkouts.
+# Source and docs stay LF everywhere; only Windows-only scripts differ.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Media and binaries must never be re-encoded.
+*.flac binary
+*.mp3 binary
+*.ogg binary
+*.ncm binary
+*.mflac binary
+*.mgg binary
