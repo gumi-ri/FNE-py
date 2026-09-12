@@ -41,8 +41,8 @@ QMC2 路径必须读 QQ 音乐进程的内存，用到 Win32 API，所以目前�
 
 ### 方式一：下载单文件（推荐）
 
-从 [Releases](https://github.com/gumi-ri/FNE-py/releases) 下载 `fne.exe`，约 19 MB，
-**免安装、免 Python 环境**。同一个文件既是图形界面也是命令行：
+从 [Releases](https://github.com/gumi-ri/FNE-py/releases/latest) 下载 `fne.exe`，
+约 19 MB，**免安装、免 Python 环境**。同一个文件既是图形界面也是命令行：
 
 ```bash
 fne.exe                                        # 双击或直接运行 = 打开窗口
@@ -50,7 +50,13 @@ fne.exe -i "C:/Music/VipSongsDownload" -o "D:/Music/Converted"
 fne.exe --selftest                             # 自检：报告这个文件能不能正常用
 ```
 
+要求 Windows 10 / 11 x64。`fne.exe` 未做代码签名，首次运行可能有 SmartScreen
+提示；拿不准就先跑 `--selftest`，看最后一行是不是 `selftest: PASS`。
+
 换电脑 / 换目录时把 `config.json` 和 `.fne/` 一起带走——它们放在 exe 同级目录。
+
+> QQ 音乐那条线需要客户端**正在运行且已登录**（令牌只存在于进程内存里）。
+> 第一次跑会把取到的令牌缓存到 exe 同级的 `.fne/`，之后即使关掉客户端也能用一段时间。
 
 ### 方式二：从源码安装
 
